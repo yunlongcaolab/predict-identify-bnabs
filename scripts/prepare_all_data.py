@@ -333,6 +333,48 @@ def prepare_fig5():
     fit_params.to_csv(tg/"ELISA_fit_params_agg.csv")
 
 def prepare_extfigs():
+    # ExtFig2
+    tg = tgdir/'ExtFig2'
+    tg.mkdir(exist_ok=True, parents=True)
+    
+    neut = pd.read_csv(srcdir/'Fig2-WT-NAbs-neut.csv')
+    single = pd.read_csv(srcdir/'ExtFig2-single_muts_neut.csv')
+    filters = single.columns[single.columns.str.startswith('D614G+')].tolist() + ['D614G+E484K']
+    neut = neut.merge(
+        single, on='id', how='left'
+    ).assign(
+        filter_worst_single = lambda x: x[filters].max(axis=1)
+    )
+
+    neut = neut.query('source == "WT"').sort_values('filter_worst_single').rename(
+        columns={k: k.replace('D614G+', 'B.1+') for k in filters}
+    )
+
+    neut.to_csv(tg/'neutralization_single.csv', index=False)
+
+    # enrich
+    x_name = []
+    y_name = []
+    val = []
+    for metric in [["D614G_IC50"], ["B.1+E484K"], 
+                    ["filter_worst_single"],
+                    ]:
+        if len(metric) > 0:
+            _tmp_data = neut.assign(metric_best = lambda x: [np.max(x.loc[y,metric]) for y in x.index]).query('metric_best < 0.05')
+        else:
+            _tmp_data = neut.copy()
+
+        for target in [[], ["BA1_IC50", "BA2_IC50"], ["BA1_IC50", "BA2_IC50", "BA5_IC50"], ["BA1_IC50", "BA2_IC50", "BA5_IC50", "BQ1_1_IC50", "XBB1_5_IC50"]]:
+            if len(target) > 0:
+                _tg_data = _tmp_data.assign(target_best = lambda x: [np.max(x.loc[y, target]) for y in x.index]).query("target_best < 0.05")
+            else:
+                _tg_data = _tmp_data
+            x_name.append('_'.join(metric))
+            y_name.append('_'.join(target) if len(target) > 0 else "all")
+            val.append(len(_tg_data))
+
+    pd.DataFrame({'indicator':x_name, 'target':y_name, 'value': val}).to_csv(tg/"enrich_bars_data.csv")
+    # ExtFig5
     tg = tgdir/'ExtFig5'
     plot_dir = tg/'..'/'..'/'plot_scripts'/'plots'/'ExtFig5'
     plot_dir.mkdir(exist_ok=True, parents=True)

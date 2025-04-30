@@ -1,6 +1,75 @@
 library(tidyverse)
 library(ggplot2)
+library(ComplexHeatmap)
+library(circlize)
 
+# ExtFig2
+show_cols <- c(
+    "D614G_IC50", 
+    "B.1+E484K", 
+    "B.1+V483G",
+    "B.1+F486I",
+    "B.1+F490L",
+    "B.1+F490S",
+    "B.1+K378E",
+    "B.1+K378N",
+    "B.1+K417N",
+    "B.1+L452R",
+    "B.1+N450K",
+    "B.1+Q493K",
+    "B.1+R346S",
+    "B.1+R346T",
+    "B.1+K444E",
+    "B.1+K444N",
+    "B.1+V445D",
+    "B.1+G446V",
+    "BA1_IC50",
+    "BA2_IC50",
+    "BA5_IC50",
+    "filter_worst_single"
+)
+data_raw <- read.csv("../processed_source_data/ExtFig2/neutralization_single.csv", check.names=F)
+rownames(data_raw) <- data_raw$id
+data <- data_raw %>% 
+    pivot_longer(!c(id, source,v_gene_H)) %>% filter(name %in% show_cols)
+
+data$value[data$value < 0.0005] = 0.0005
+
+wtmat <- as.data.frame(data %>% pivot_wider(id_cols=name, names_from = id, values_from = value))
+
+rownames(wtmat) <- wtmat$name
+wtmat <- log10(wtmat[,-1])[show_cols,]
+x <- hclust(dist(t(wtmat[c('filter_worst_single', 'BA1_IC50','BA2_IC50', 'BA5_IC50'),]<log10(0.05))))
+
+col_fun = colorRamp2(c(-3,log10(0.05),0), c("#4575b4","white","#d73027"))
+col_fun_bin = colorRamp2(c(0, 0.3,1), c("#7585c4","white","#cccccc"))
+col_fun_fc = colorRamp2(c(-1, -log10(3), log10(3),2), c("#4575b4","white","white","#d73027"))
+
+wtmat <- wtmat[,x$order]
+
+sources <- (data_raw[colnames(wtmat), 'B.1+E484K'] < 0.05)
+
+pdf("plots/ExtFig2/single-heatmap.pdf", width=7, height=4.2)
+Heatmap(
+    wtmat, cluster_rows = F, cluster_columns = F, na_col = "#666666", show_column_names=F,
+        column_split=sources, border=T,col=col_fun
+)
+
+dev.off()
+pdf("plots/ExtFig2/enrich_bars.pdf", width=2, height=2.5)
+res <- read.csv("../processed_source_data/ExtFig2/enrich_bars_data.csv")
+
+res$indicator <- factor(res$indicator, levels=c("D614G_IC50", "B.1+E484K", "filter_worst_single"))
+ggplot(res, aes(x=indicator, y=value)) + geom_bar(data=res %>% filter(target == "all"), stat="identity", fill="#CDCDCD", width=0.8) +
+     geom_bar(data=res %>% filter(target == "BA1_IC50_BA2_IC50"), stat="identity", fill="#F4B183", width=0.8) +
+     geom_bar(data=res %>% filter(target == "BA1_IC50_BA2_IC50_BA5_IC50"), stat="identity", fill="#9BBB59", width=0.8)+
+     geom_bar(data=res %>% filter(target == "BA1_IC50_BA2_IC50_BA5_IC50_BQ1_1_IC50_XBB1_5_IC50"), stat="identity", fill="#CF6B50", width=0.8)+
+     geom_line(aes(group=target), linetype="dashed") + 
+     geom_point(shape=21, fill="white") + 
+    theme_classic()
+
+dev.off()
+# ExtFig5
 plot <- function (fit_data, fit_params, fit_params_ind, data, name) {
     cb <- c("#1b9e77", "#d95f02", "#7570b3", "#e7298a", "#66a61e", "#e6ab02", "#a6761d", "#666666","#006d2c","#54278f","#810f7c","#08519c","#807dba","#6baed6", "#2caddc", "#9e5ac8", "#f33272")
 
